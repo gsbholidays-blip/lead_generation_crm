@@ -40,10 +40,16 @@ import {
 
 type Option = { id: string; name: string };
 
+const UNASSIGNED = "unassigned";
+
 export function AddLeadDialog({
   statuses,
+  users,
+  canReassign,
 }: {
   statuses: Option[];
+  users: Option[];
+  canReassign: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -212,6 +218,42 @@ export function AddLeadDialog({
                   </FormItem>
                 )}
               />
+              {canReassign && (
+                <FormField
+                  control={form.control}
+                  name="assignedToId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Assign To</FormLabel>
+                      <Select
+                        value={field.value ?? UNASSIGNED}
+                        onValueChange={(v) => field.onChange(v === UNASSIGNED ? undefined : v)}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Unassigned">
+                              {(v: string) =>
+                                v === UNASSIGNED
+                                  ? "Unassigned"
+                                  : (users.find((u) => u.id === v)?.name ?? "Unassigned")
+                              }
+                            </SelectValue>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                          {users.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>

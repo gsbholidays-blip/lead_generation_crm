@@ -50,10 +50,12 @@ export function LeadsToolbar({
   statuses,
   users,
   showAssigneeFilter,
+  canReassign,
 }: {
   statuses: Option[];
   users: Option[];
   showAssigneeFilter: boolean;
+  canReassign: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -65,6 +67,12 @@ export function LeadsToolbar({
   const createdTo = searchParams.get("createdTo");
   const createdRange: DateRange | undefined = createdFrom
     ? { from: new Date(createdFrom), to: createdTo ? new Date(createdTo) : new Date(createdFrom) }
+    : undefined;
+
+  const checkInFrom = searchParams.get("checkInFrom");
+  const checkInTo = searchParams.get("checkInTo");
+  const checkInRange: DateRange | undefined = checkInFrom
+    ? { from: new Date(checkInFrom), to: checkInTo ? new Date(checkInTo) : new Date(checkInFrom) }
     : undefined;
 
   function updateParams(updates: Record<string, string | null>) {
@@ -105,6 +113,19 @@ export function LeadsToolbar({
   }
 
   const hasCreatedDateFilter = !!createdFrom;
+
+  function handleCheckInRangeSelect(selected: DateRange | undefined) {
+    updateParams({
+      checkInFrom: selected?.from ? toDateParam(selected.from) : null,
+      checkInTo: selected?.to
+        ? toDateParam(selected.to)
+        : selected?.from
+          ? toDateParam(selected.from)
+          : null,
+    });
+  }
+
+  const hasCheckInDateFilter = !!checkInFrom;
 
   function exportUrl(format: "csv" | "xlsx") {
     const params = new URLSearchParams(searchParams.toString());
@@ -229,6 +250,39 @@ export function LeadsToolbar({
             <X className="size-3.5" />
           </Button>
         )}
+
+        <Popover>
+          <PopoverTrigger render={<Button variant="outline" className="justify-start font-normal" />}>
+            <CalendarIcon className="size-4" />
+            {hasCheckInDateFilter ? (
+              <span>
+                {formatDate(checkInFrom!)}
+                {checkInTo && checkInTo !== checkInFrom ? ` – ${formatDate(checkInTo)}` : ""}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Check-in date</span>
+            )}
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="range"
+              selected={checkInRange}
+              onSelect={handleCheckInRangeSelect}
+              numberOfMonths={2}
+            />
+          </PopoverContent>
+        </Popover>
+
+        {hasCheckInDateFilter && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Clear check-in date filter"
+            onClick={() => updateParams({ checkInFrom: null, checkInTo: null })}
+          >
+            <X className="size-3.5" />
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
@@ -249,7 +303,7 @@ export function LeadsToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <AddLeadDialog statuses={statuses} />
+        <AddLeadDialog statuses={statuses} users={users} canReassign={canReassign} />
       </div>
     </div>
   );

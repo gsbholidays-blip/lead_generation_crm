@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth/session";
 import { handleApiError, jsonError } from "@/lib/api-response";
 import { listGalleryVideos, nextGalleryVideoOrder } from "@/lib/queries/gallery-videos";
-import { getSupabasePublicUrl, InvalidFileUploadError, saveSupabaseVideo } from "@/lib/storage/supabase-file-storage";
+import { getSupabasePublicUrl } from "@/lib/storage/supabase-file-storage";
 import { createGalleryVideoSchema } from "@/lib/validations/gallery-videos";
 
 export async function GET() {
@@ -18,36 +18,22 @@ export async function GET() {
   }
 }
 
+// The actual video bytes are uploaded directly from the browser to Supabase
+// Storage beforehand (see /api/gallery-videos/presign) — Vercel Functions cap
+// request bodies at ~4.5MB, far under what a real video needs, so this route
+// only ever receives the resulting object key as JSON, never the file itself.
 export async function POST(request: NextRequest) {
   try {
     await requireRole("ADMIN", "MANAGER");
-    const formData = await request.formData();
+    const body = await request.json().catch(() => null);
+    if (!body) return jsonError("Invalid request body", 400);
 
-    const input = createGalleryVideoSchema.parse({
-      caption: formData.get("caption") || undefined,
-      order: formData.get("order") || undefined,
-    });
-
-    const file = formData.get("video");
-    if (!(file instanceof File) || file.size === 0) {
-      return jsonError("A video is required", 400);
-    }
-
-    let video: { path: string; mimeType: string };
-    try {
-      video = await saveSupabaseVideo(file, "gallery");
-    } catch (error) {
-      if (error instanceof InvalidFileUploadError) {
-        return jsonError(error.message, 400);
-      }
-      throw error;
-    }
-
+    const input = createGalleryVideoSchema.parse(body);
     const order = input.order ?? (await nextGalleryVideoOrder());
 
     const galleryVideo = await db.galleryVideo.create({
       data: {
-        videoPath: video.path,
+        videoPath: input.path,
         caption: input.caption,
         order,
       },

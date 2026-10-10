@@ -64,7 +64,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
-      <LeadHeader lead={lead} />
+      <LeadHeader lead={lead} users={users} canReassign={can(session.role, "reassignLeads")} />
 
       <LeadBookingHistory
         leadId={lead.id}

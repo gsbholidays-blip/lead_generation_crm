@@ -66,9 +66,18 @@ export async function listFollowUps(query: FollowUpListQuery, scope: LeadScope) 
   // explicit request to see every status, distinct from that default.
   const statusFilter =
     query.status === "ALL" ? undefined : query.status ?? "PENDING";
+
+  // "MISSED" is never actually persisted on a FollowUp's status column — there's
+  // no cron transitioning overdue PENDING follow-ups to MISSED. Treat it as a
+  // derived state at query time: a real MISSED row (if one ever exists) OR any
+  // still-PENDING follow-up whose dueAt has already passed.
   const where: Prisma.FollowUpWhereInput = {
-    ...(statusFilter ? { status: statusFilter } : {}),
     lead: leadWhere,
+    ...(statusFilter === "MISSED"
+      ? { OR: [{ status: "MISSED" }, { status: "PENDING", dueAt: { lt: new Date() } }] }
+      : statusFilter
+        ? { status: statusFilter }
+        : {}),
   };
 
   const orderBy: Prisma.FollowUpOrderByWithRelationInput =

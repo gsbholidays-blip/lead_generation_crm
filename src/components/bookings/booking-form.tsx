@@ -313,14 +313,16 @@ export function BookingForm({
   }, [isVilla]);
 
   // Nights is derived from the date range whenever both dates are set —
-  // check-out is always forward of check-in (enforced by the schema
-  // refine), so this is always >= 1.
+  // check-out is always on or after check-in (enforced by the schema
+  // refine), so this is always >= 0. diffDays === 0 is a same-day
+  // ("one day package") booking and should sync nights to 0, not leave
+  // whatever stale value was there before.
   useEffect(() => {
     if (!watchedCheckInDate || !watchedCheckOutDate) return;
     const diffDays = Math.round(
       (watchedCheckOutDate.getTime() - watchedCheckInDate.getTime()) / (1000 * 60 * 60 * 24)
     );
-    if (diffDays >= 1 && diffDays !== watchedNights) {
+    if (diffDays >= 0 && diffDays !== watchedNights) {
       form.setValue("nights", diffDays, { shouldValidate: true });
     }
   }, [watchedCheckInDate, watchedCheckOutDate, watchedNights, form]);
@@ -564,7 +566,7 @@ export function BookingForm({
                     <FormControl>
                       <Input
                         type="number"
-                        min={1}
+                        min={0}
                         value={field.value ?? ""}
                         onChange={(e) => field.onChange(e.target.valueAsNumber)}
                       />

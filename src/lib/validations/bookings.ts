@@ -62,7 +62,9 @@ const rawBookingFields = {
   email: clearableText(200),
   checkInDate: z.coerce.date({ message: "Check-in date is required" }),
   checkOutDate: z.coerce.date({ message: "Check-out date is required" }),
-  nights: z.coerce.number().int().min(1),
+  // min(0), not min(1): a same-day ("one day package") booking has
+  // checkOutDate === checkInDate and 0 nights stayed.
+  nights: z.coerce.number().int().min(0),
   stayType: clearableEnum(STAY_TYPES),
   adultCount: z.coerce.number().int().min(1, "At least 1 adult is required"),
   kidsCount: z.coerce.number().int().min(0),
@@ -108,8 +110,8 @@ export const createBookingSchema = z
     source: rawBookingFields.source.transform((v) => (v === "" ? undefined : v)),
     location: rawBookingFields.location.transform((v) => (v === "" ? undefined : v)),
   })
-  .refine((data) => data.checkOutDate > data.checkInDate, {
-    message: "Check-out date must be after check-in date",
+  .refine((data) => data.checkOutDate >= data.checkInDate, {
+    message: "Check-out date must be on or after check-in date",
     path: ["checkOutDate"],
   });
 
@@ -127,7 +129,9 @@ export const bookingFormSchema = z
     email: z.string(),
     checkInDate: z.date({ message: "Check-in date is required" }),
     checkOutDate: z.date({ message: "Check-out date is required" }),
-    nights: z.number().int().min(1),
+    // min(0), not min(1): a same-day ("one day package") booking has
+    // checkOutDate === checkInDate and 0 nights stayed.
+    nights: z.number().int().min(0),
     stayType: z.string(),
     adultCount: z.number().int().min(1, "At least 1 adult is required"),
     kidsCount: z.number().int().min(0),
@@ -152,8 +156,8 @@ export const bookingFormSchema = z
     assignedToId: z.string(),
     statusId: z.string().min(1, "Status is required"),
   })
-  .refine((data) => data.checkOutDate > data.checkInDate, {
-    message: "Check-out date must be after check-in date",
+  .refine((data) => data.checkOutDate >= data.checkInDate, {
+    message: "Check-out date must be on or after check-in date",
     path: ["checkOutDate"],
   });
 
@@ -190,8 +194,8 @@ export const updateBookingSchema = z
   })
   .refine(
     (data) =>
-      !data.checkInDate || !data.checkOutDate || data.checkOutDate > data.checkInDate,
-    { message: "Check-out date must be after check-in date", path: ["checkOutDate"] }
+      !data.checkInDate || !data.checkOutDate || data.checkOutDate >= data.checkInDate,
+    { message: "Check-out date must be on or after check-in date", path: ["checkOutDate"] }
   );
 
 export type UpdateBookingInput = z.infer<typeof updateBookingSchema>;

@@ -46,7 +46,15 @@ const destinationIdField = z
   .or(z.literal(""))
   .transform((v) => v || undefined);
 
-const PACKAGE_TYPES = ["Villa", "Farmhouse", "Resort", "Cottage", "Camping", "Glamping"] as const;
+export const PACKAGE_TYPES = [
+  "Villa",
+  "Farmhouse",
+  "Resort",
+  "Cottage",
+  "Camping",
+  "Glamping",
+  "Banquet",
+] as const;
 
 const rawPackageFields = {
   name: z.string().trim().min(1, "Name is required").max(200),

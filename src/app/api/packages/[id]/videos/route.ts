@@ -1,8 +1,24 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth/session";
 import { handleApiError, jsonError } from "@/lib/api-response";
-import { getSupabasePublicUrl, InvalidFileUploadError, saveSupabaseVideo } from "@/lib/storage/supabase-file-storage";
+import { getSupabasePublicUrl, VIDEO_MIME_TYPES } from "@/lib/storage/supabase-file-storage";
+
+// The video bytes themselves are uploaded directly from the browser to
+// Supabase Storage beforehand (see the sibling /presign route) — Vercel
+// Functions cap request bodies at ~4.5MB, far under what a real video needs,
+// so this route only ever receives the resulting object keys as JSON.
+const createPackageVideosSchema = z.object({
+  videos: z
+    .array(
+      z.object({
+        path: z.string().trim().min(1, "path is required"),
+        mimeType: z.enum(VIDEO_MIME_TYPES),
+      })
+    )
+    .min(1, "At least one video is required"),
+});
 
 // Adds one or more gallery videos to an existing package, independent of the
 // cover image/single videoUrl link — lets the admin UI add videos to an
@@ -15,11 +31,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/packages/[i
     const pkg = await db.package.findUnique({ where: { id } });
     if (!pkg) return jsonError("Package not found", 404);
 
-    const formData = await request.formData();
-    const files = formData.getAll("videos").filter((f): f is File => f instanceof File && f.size > 0);
-    if (files.length === 0) {
-      return jsonError("At least one video is required", 400);
-    }
+    const body = await request.json().catch(() => null);
+    if (!body) return jsonError("Invalid request body", 400);
+
+    const { videos } = createPackageVideosSchema.parse(body);
 
     const maxOrder = await db.packageVideo.aggregate({
       where: { packageId: id },
@@ -28,20 +43,11 @@ export async function POST(request: Request, ctx: RouteContext<"/api/packages/[i
     let nextOrder = (maxOrder._max.order ?? -1) + 1;
 
     const created = [];
-    for (const file of files) {
-      let uploaded: { path: string };
-      try {
-        uploaded = await saveSupabaseVideo(file, "packages");
-      } catch (error) {
-        if (error instanceof InvalidFileUploadError) {
-          return jsonError(error.message, 400);
-        }
-        throw error;
-      }
-      const video = await db.packageVideo.create({
-        data: { packageId: id, videoPath: uploaded.path, order: nextOrder },
+    for (const video of videos) {
+      const dbVideo = await db.packageVideo.create({
+        data: { packageId: id, videoPath: video.path, order: nextOrder },
       });
-      created.push({ ...video, url: getSupabasePublicUrl(video.videoPath) });
+      created.push({ ...dbVideo, url: getSupabasePublicUrl(dbVideo.videoPath) });
       nextOrder += 1;
     }
 

@@ -8,10 +8,10 @@ import { generateInvoiceNumber } from "@/lib/invoice";
 import { getBookingDetail } from "@/lib/queries/bookings";
 import { buildBookingEventPayload, notifyBookingEvent } from "@/lib/notify-booking-event";
 import {
-  deleteLocalFile,
+  deleteSupabaseFile,
   InvalidFileUploadError,
-  saveLocalFile,
-} from "@/lib/storage/local-file-storage";
+  saveSupabaseDocument,
+} from "@/lib/storage/supabase-file-storage";
 import { updateBookingSchema } from "@/lib/validations/bookings";
 
 export async function GET(_request: Request, ctx: RouteContext<"/api/bookings/[id]">) {
@@ -88,8 +88,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/bookings/[
     const file = formData.get("attachment");
     if (file instanceof File && file.size > 0) {
       try {
-        const attachment = await saveLocalFile(file, "bookings");
-        await deleteLocalFile(existing.attachmentPath);
+        const attachment = await saveSupabaseDocument(file, "bookings");
+        await deleteSupabaseFile(existing.attachmentPath);
         attachmentFields = {
           attachmentPath: attachment.path,
           attachmentName: file.name,
@@ -100,10 +100,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/bookings/[
         if (error instanceof InvalidFileUploadError) {
           return jsonError(error.message, 400);
         }
-        throw error;
+        // Don't let a storage-layer hiccup fall through to an opaque 500 —
+        // surface it as a clear, retriable error instead.
+        console.error("Booking attachment upload failed", error);
+        return jsonError("Failed to upload attachment. Please try again.", 502);
       }
     } else if (input.removeAttachment) {
-      await deleteLocalFile(existing.attachmentPath);
+      await deleteSupabaseFile(existing.attachmentPath);
       attachmentFields = {
         attachmentPath: null,
         attachmentName: null,
@@ -187,7 +190,7 @@ export async function DELETE(_request: Request, ctx: RouteContext<"/api/bookings
     if (!existing) return jsonError("Booking not found", 404);
 
     await db.booking.delete({ where: { id } });
-    await deleteLocalFile(existing.attachmentPath);
+    await deleteSupabaseFile(existing.attachmentPath);
 
     return NextResponse.json({ success: true });
   } catch (error) {

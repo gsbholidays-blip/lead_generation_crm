@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Info, Loader2, Plus, X } from "lucide-react";
 
-import { packageFormSchema, type PackageFormValues } from "@/lib/validations/packages";
+import { PACKAGE_TYPES, packageFormSchema, type PackageFormValues } from "@/lib/validations/packages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { DestinationRow } from "@/components/destinations/destinations-manager";
+import { requestSignedVideoUpload, uploadVideoToSignedUrl } from "@/lib/video-upload-client";
 
 export type PackageRow = {
   id: string;
@@ -59,7 +60,6 @@ export type PackageRow = {
   videos: { id: string; url: string }[];
 };
 
-const PACKAGE_TYPES = ["Villa", "Farmhouse", "Resort", "Cottage", "Camping", "Glamping"] as const;
 const MEAL_OPTIONS = ["Veg", "Non-Veg"] as const;
 
 /** Adds one gallery image to an already-created package — used both by the create flow (right after the package exists) and the edit flow. */
@@ -73,11 +73,30 @@ async function uploadGalleryImages(packageId: string, files: File[]) {
   }
 }
 
-/** Adds one gallery video to an already-created package — used both by the create flow (right after the package exists) and the edit flow. */
-async function uploadGalleryVideos(packageId: string, files: File[]) {
-  const formData = new FormData();
-  for (const file of files) formData.append("videos", file);
-  const res = await fetch(`/api/packages/${packageId}/videos`, { method: "POST", body: formData });
+/**
+ * Adds one or more gallery videos to an already-created package — used both
+ * by the create flow (right after the package exists) and the edit flow.
+ * Each file is uploaded directly from this browser to Supabase Storage via a
+ * signed URL (see requestSignedVideoUpload) — never through this app's own
+ * API — since Vercel would reject any real video there (~4.5MB body cap).
+ * Only the resulting object keys are then sent to /videos to persist records.
+ */
+async function uploadGalleryVideos(packageId: string, files: File[], onProgress?: (percent: number) => void) {
+  const uploaded: { path: string; mimeType: string }[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const presigned = await requestSignedVideoUpload(`/api/packages/${packageId}/videos/presign`, file.type);
+    await uploadVideoToSignedUrl(presigned.signedUrl, file, (filePercent) => {
+      onProgress?.(Math.round(((i + filePercent / 100) / files.length) * 100));
+    });
+    uploaded.push({ path: presigned.path, mimeType: presigned.mimeType });
+  }
+
+  const res = await fetch(`/api/packages/${packageId}/videos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videos: uploaded }),
+  });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error ?? "Failed to upload videos");
@@ -104,6 +123,7 @@ export function PackageFormDialog({
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [galleryVideoFiles, setGalleryVideoFiles] = useState<File[]>([]);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number | null>(null);
 
   const form = useForm<PackageFormValues>({
     resolver: zodResolver(packageFormSchema),
@@ -242,17 +262,16 @@ export function PackageFormDialog({
       if (file) formData.set("image", file);
       if (mode === "create") {
         for (const galleryFile of galleryFiles) formData.append("images", galleryFile);
-        for (const galleryVideoFile of galleryVideoFiles) formData.append("videos", galleryVideoFile);
       }
 
       const res = await fetch(mode === "create" ? "/api/packages" : `/api/packages/${pkg!.id}`, {
         method: mode === "create" ? "POST" : "PATCH",
         body: formData,
       });
+      const responseBody = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error ?? "Failed to save package");
+        toast.error(responseBody.error ?? "Failed to save package");
         return;
       }
 
@@ -264,11 +283,20 @@ export function PackageFormDialog({
           toast.error(error instanceof Error ? error.message : "Failed to upload images");
         }
       }
-      if (mode === "edit" && galleryVideoFiles.length > 0) {
+
+      // Videos always go straight from this browser to Supabase Storage
+      // (see uploadGalleryVideos) rather than riding along in the package
+      // create/update request body, so this runs as a follow-up call in both
+      // modes once the package id is known.
+      const packageId: string | undefined = mode === "create" ? responseBody.package?.id : pkg!.id;
+      if (galleryVideoFiles.length > 0 && packageId) {
+        setVideoUploadProgress(0);
         try {
-          await uploadGalleryVideos(pkg!.id, galleryVideoFiles);
+          await uploadGalleryVideos(packageId, galleryVideoFiles, setVideoUploadProgress);
         } catch (error) {
           toast.error(error instanceof Error ? error.message : "Failed to upload videos");
+        } finally {
+          setVideoUploadProgress(null);
         }
       }
 
@@ -786,6 +814,17 @@ export function PackageFormDialog({
                 />
               </label>
               <p className="text-muted-foreground text-xs">MP4, WebM, or MOV, up to 100MB each.</p>
+              {videoUploadProgress !== null && (
+                <div className="space-y-1">
+                  <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                    <div
+                      className="bg-primary h-full rounded-full transition-all"
+                      style={{ width: `${videoUploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-muted-foreground text-xs">Uploading videos… {videoUploadProgress}%</p>
+                </div>
+              )}
             </div>
 
             <DialogFooter>

@@ -41,6 +41,8 @@ export default async function LeadsPage({
     invoiceNumber: lead.invoiceNumber,
     createdAt: lead.createdAt.toISOString(),
     followUpDate: lead.followUpDate ? lead.followUpDate.toISOString() : null,
+    checkInDate: lead.checkInDate ? lead.checkInDate.toISOString() : null,
+    checkOutDate: lead.checkOutDate ? lead.checkOutDate.toISOString() : null,
     statusId: lead.statusId,
     status: { id: lead.status.id, name: lead.status.name, color: lead.status.color },
     assignedTo: lead.assignedTo,
@@ -59,11 +61,14 @@ export default async function LeadsPage({
         statuses={statuses}
         users={users}
         showAssigneeFilter={role !== "SALES_EXECUTIVE"}
+        canReassign={can(role, "reassignLeads")}
       />
 
       <LeadsTable
         leads={leads}
         statuses={statuses}
+        users={users}
+        canReassign={can(role, "reassignLeads")}
         total={result.total}
         page={result.page}
         pageSize={result.pageSize}

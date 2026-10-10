@@ -6,7 +6,7 @@ import { calculateBookingFinancials } from "@/lib/booking-financials";
 import { generateInvoiceNumber } from "@/lib/invoice";
 import { listBookings } from "@/lib/queries/bookings";
 import { buildBookingEventPayload, notifyBookingEvent } from "@/lib/notify-booking-event";
-import { InvalidFileUploadError, saveLocalFile } from "@/lib/storage/local-file-storage";
+import { InvalidFileUploadError, saveSupabaseDocument } from "@/lib/storage/supabase-file-storage";
 import { bookingListQuerySchema, createBookingSchema } from "@/lib/validations/bookings";
 
 export async function GET(request: NextRequest) {
@@ -67,12 +67,16 @@ export async function POST(request: NextRequest) {
     const file = formData.get("attachment");
     if (file instanceof File && file.size > 0) {
       try {
-        attachment = await saveLocalFile(file, "bookings");
+        attachment = await saveSupabaseDocument(file, "bookings");
       } catch (error) {
         if (error instanceof InvalidFileUploadError) {
           return jsonError(error.message, 400);
         }
-        throw error;
+        // Don't let a storage-layer hiccup (network blip, bucket
+        // misconfiguration, etc.) fall through to an opaque 500 — surface it
+        // as a clear, retriable error instead.
+        console.error("Booking attachment upload failed", error);
+        return jsonError("Failed to upload attachment. Please try again.", 502);
       }
     }
 

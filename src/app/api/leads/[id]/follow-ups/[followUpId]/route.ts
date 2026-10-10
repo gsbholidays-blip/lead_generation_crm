@@ -26,15 +26,26 @@ export async function PATCH(
       },
     });
 
-    await logActivity({
-      leadId: id,
-      userId: session.sub,
-      type: input.status === "DONE" ? "FOLLOW_UP_COMPLETED" : "FOLLOW_UP_MISSED",
-      description:
-        input.status === "DONE"
-          ? "Follow-up marked as done"
-          : `Follow-up marked as ${input.status.toLowerCase()}`,
-    });
+    const activityType =
+      input.status === "DONE"
+        ? "FOLLOW_UP_COMPLETED"
+        : input.status === "CANCELLED"
+          ? "FOLLOW_UP_CANCELLED"
+          : input.status === "MISSED"
+            ? "FOLLOW_UP_MISSED"
+            : null;
+
+    if (activityType) {
+      await logActivity({
+        leadId: id,
+        userId: session.sub,
+        type: activityType,
+        description:
+          input.status === "DONE"
+            ? "Follow-up marked as done"
+            : `Follow-up marked as ${input.status.toLowerCase()}`,
+      });
+    }
 
     return NextResponse.json({ followUp: updated });
   } catch (error) {

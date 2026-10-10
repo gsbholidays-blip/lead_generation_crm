@@ -15,6 +15,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SourceBadge } from "@/components/leads/source-badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type Option = { id: string; name: string };
+
+const UNASSIGNED = "unassigned";
 
 // No photo upload for leads — an initials avatar is the pragmatic default.
 function initials(name: string) {
@@ -24,7 +35,11 @@ function initials(name: string) {
 
 export function LeadHeader({
   lead,
+  users,
+  canReassign,
 }: {
+  users: Option[];
+  canReassign: boolean;
   lead: {
     id: string;
     fullName: string;
@@ -130,9 +145,28 @@ export function LeadHeader({
           </div>
         </div>
 
-        <span className="text-muted-foreground text-sm">
-          {lead.assignedTo?.name ?? "Unassigned"}
-        </span>
+        {canReassign ? (
+          <Select
+            value={lead.assignedTo?.id ?? UNASSIGNED}
+            onValueChange={(v) => patch({ assignedToId: v === UNASSIGNED ? null : v })}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue>{lead.assignedTo?.name ?? "Unassigned"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+              {users.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <span className="text-muted-foreground text-sm">
+            {lead.assignedTo?.name ?? "Unassigned"}
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-4">

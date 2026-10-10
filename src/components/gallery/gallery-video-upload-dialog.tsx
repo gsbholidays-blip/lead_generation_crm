@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { requestSignedVideoUpload, uploadVideoToSignedUrl } from "@/lib/video-upload-client";
 
 export function GalleryVideoUploadDialog() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export function GalleryVideoUploadDialog() {
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   async function handleSubmit() {
     if (!file) {
@@ -31,12 +33,23 @@ export function GalleryVideoUploadDialog() {
     }
 
     setIsSubmitting(true);
+    setProgress(0);
     try {
-      const formData = new FormData();
-      formData.set("video", file);
-      if (caption.trim()) formData.set("caption", caption.trim());
+      // The video goes straight from this browser to Supabase Storage (see
+      // requestSignedVideoUpload) — it never passes through this app's own
+      // API, since Vercel would reject any real video there (~4.5MB body cap).
+      const upload = await requestSignedVideoUpload("/api/gallery-videos/presign", file.type);
+      await uploadVideoToSignedUrl(upload.signedUrl, file, setProgress);
 
-      const res = await fetch("/api/gallery-videos", { method: "POST", body: formData });
+      const res = await fetch("/api/gallery-videos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: upload.path,
+          mimeType: upload.mimeType,
+          caption: caption.trim() || undefined,
+        }),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast.error(data.error ?? "Failed to upload video");
@@ -48,10 +61,11 @@ export function GalleryVideoUploadDialog() {
       setFile(null);
       setCaption("");
       router.refresh();
-    } catch {
-      toast.error("Something went wrong. Please try again.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
+      setProgress(0);
     }
   }
 
@@ -81,6 +95,17 @@ export function GalleryVideoUploadDialog() {
               <Label>Caption (optional)</Label>
               <Input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Sunset boat ride" />
             </div>
+            {isSubmitting && (
+              <div className="space-y-1">
+                <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                  <div
+                    className="bg-primary h-full rounded-full transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <p className="text-muted-foreground text-xs">Uploading… {progress}%</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
