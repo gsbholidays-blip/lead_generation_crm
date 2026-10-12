@@ -24,9 +24,20 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
+
+type Option = { id: string; name: string };
+
+const UNASSIGNED = "unassigned";
 
 function SortHeader({
   field,

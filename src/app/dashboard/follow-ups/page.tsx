@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { can } from "@/lib/auth/rbac";
 import { listFollowUps } from "@/lib/queries/follow-ups";
 import type { LeadScope } from "@/lib/queries/leads";
 import { followUpListQuerySchema } from "@/lib/validations/follow-ups";
@@ -17,11 +18,17 @@ export default async function FollowUpsPage({
   const scope: LeadScope =
     session?.role === "SALES_EXECUTIVE" ? { forcedAssignedToId: session.sub } : {};
 
-  const [result, statuses] = await Promise.all([
+  const [result, statuses, users] = await Promise.all([
     listFollowUps(query, scope),
     db.leadStatus.findMany({ orderBy: { order: "asc" } }),
+    db.user.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
   const showAssignee = session?.role !== "SALES_EXECUTIVE";
+  const canReassign = can(session?.role ?? "SALES_EXECUTIVE", "reassignLeads");
 
   const items = result.followUps.map((f) => ({
     id: f.id,
@@ -56,6 +63,8 @@ export default async function FollowUpsPage({
         sortBy={query.sortBy}
         sortDir={query.sortDir}
         showAssignee={showAssignee}
+        users={users}
+        canReassign={canReassign}
       />
     </div>
   );
