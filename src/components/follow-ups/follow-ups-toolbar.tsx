@@ -51,6 +51,9 @@ export function FollowUpsToolbar({ statuses }: { statuses: LeadStatusOption[] })
     ? { from: new Date(enquiredFrom), to: enquiredTo ? new Date(enquiredTo) : new Date(enquiredFrom) }
     : undefined;
 
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+  const [pendingRange, setPendingRange] = useState<DateRange | undefined>(range);
+
   function updateParams(updates: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(updates)) {
@@ -74,11 +77,32 @@ export function FollowUpsToolbar({ statuses }: { statuses: LeadStatusOption[] })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  function handleRangeSelect(selected: DateRange | undefined) {
+  function commitRange(selected: DateRange | undefined) {
     updateParams({
       enquiredFrom: selected?.from ? toDateParam(selected.from) : null,
       enquiredTo: selected?.to ? toDateParam(selected.to) : selected?.from ? toDateParam(selected.from) : null,
     });
+  }
+
+  // Keep the in-progress range selection local while the popover is open —
+  // committing to the URL (and therefore re-deriving `range` as the Calendar's
+  // controlled `selected`) after every single click collapsed the second click
+  // into a brand-new selection instead of completing the range.
+  function handleRangeSelect(selected: DateRange | undefined) {
+    setPendingRange(selected);
+    if (selected?.from && selected?.to) {
+      commitRange(selected);
+      setDatePopoverOpen(false);
+    }
+  }
+
+  function handleDatePopoverOpenChange(open: boolean) {
+    setDatePopoverOpen(open);
+    if (open) {
+      setPendingRange(range);
+    } else {
+      commitRange(pendingRange);
+    }
   }
 
   const hasDateFilter = !!enquiredFrom;
@@ -134,7 +158,7 @@ export function FollowUpsToolbar({ statuses }: { statuses: LeadStatusOption[] })
         </SelectContent>
       </Select>
 
-      <Popover>
+      <Popover open={datePopoverOpen} onOpenChange={handleDatePopoverOpenChange}>
         <PopoverTrigger render={<Button variant="outline" className="justify-start font-normal" />}>
           <CalendarIcon className="size-4" />
           {hasDateFilter ? (
@@ -147,7 +171,12 @@ export function FollowUpsToolbar({ statuses }: { statuses: LeadStatusOption[] })
           )}
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0">
-          <Calendar mode="range" selected={range} onSelect={handleRangeSelect} numberOfMonths={2} />
+          <Calendar
+            mode="range"
+            selected={pendingRange}
+            onSelect={handleRangeSelect}
+            numberOfMonths={2}
+          />
         </PopoverContent>
       </Popover>
 

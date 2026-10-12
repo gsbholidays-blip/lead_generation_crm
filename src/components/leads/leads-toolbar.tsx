@@ -75,6 +75,11 @@ export function LeadsToolbar({
     ? { from: new Date(checkInFrom), to: checkInTo ? new Date(checkInTo) : new Date(checkInFrom) }
     : undefined;
 
+  const [createdPopoverOpen, setCreatedPopoverOpen] = useState(false);
+  const [pendingCreatedRange, setPendingCreatedRange] = useState<DateRange | undefined>(createdRange);
+  const [checkInPopoverOpen, setCheckInPopoverOpen] = useState(false);
+  const [pendingCheckInRange, setPendingCheckInRange] = useState<DateRange | undefined>(checkInRange);
+
   function updateParams(updates: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(updates)) {
@@ -101,7 +106,7 @@ export function LeadsToolbar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  function handleCreatedRangeSelect(selected: DateRange | undefined) {
+  function commitCreatedRange(selected: DateRange | undefined) {
     updateParams({
       createdFrom: selected?.from ? toDateParam(selected.from) : null,
       createdTo: selected?.to
@@ -112,9 +117,27 @@ export function LeadsToolbar({
     });
   }
 
+  // Keep the in-progress selection local while the popover is open — committing
+  // to the URL after every click re-derives the Calendar's controlled `selected`
+  // as a completed range, so a second click starts a new selection instead of
+  // extending it.
+  function handleCreatedRangeSelect(selected: DateRange | undefined) {
+    setPendingCreatedRange(selected);
+    if (selected?.from && selected?.to) {
+      commitCreatedRange(selected);
+      setCreatedPopoverOpen(false);
+    }
+  }
+
+  function handleCreatedPopoverOpenChange(open: boolean) {
+    setCreatedPopoverOpen(open);
+    if (open) setPendingCreatedRange(createdRange);
+    else commitCreatedRange(pendingCreatedRange);
+  }
+
   const hasCreatedDateFilter = !!createdFrom;
 
-  function handleCheckInRangeSelect(selected: DateRange | undefined) {
+  function commitCheckInRange(selected: DateRange | undefined) {
     updateParams({
       checkInFrom: selected?.from ? toDateParam(selected.from) : null,
       checkInTo: selected?.to
@@ -123,6 +146,20 @@ export function LeadsToolbar({
           ? toDateParam(selected.from)
           : null,
     });
+  }
+
+  function handleCheckInRangeSelect(selected: DateRange | undefined) {
+    setPendingCheckInRange(selected);
+    if (selected?.from && selected?.to) {
+      commitCheckInRange(selected);
+      setCheckInPopoverOpen(false);
+    }
+  }
+
+  function handleCheckInPopoverOpenChange(open: boolean) {
+    setCheckInPopoverOpen(open);
+    if (open) setPendingCheckInRange(checkInRange);
+    else commitCheckInRange(pendingCheckInRange);
   }
 
   const hasCheckInDateFilter = !!checkInFrom;
@@ -218,7 +255,7 @@ export function LeadsToolbar({
           </Select>
         )}
 
-        <Popover>
+        <Popover open={createdPopoverOpen} onOpenChange={handleCreatedPopoverOpenChange}>
           <PopoverTrigger render={<Button variant="outline" className="justify-start font-normal" />}>
             <CalendarIcon className="size-4" />
             {hasCreatedDateFilter ? (
@@ -233,7 +270,7 @@ export function LeadsToolbar({
           <PopoverContent className="w-auto p-0">
             <Calendar
               mode="range"
-              selected={createdRange}
+              selected={pendingCreatedRange}
               onSelect={handleCreatedRangeSelect}
               numberOfMonths={2}
             />
@@ -251,7 +288,7 @@ export function LeadsToolbar({
           </Button>
         )}
 
-        <Popover>
+        <Popover open={checkInPopoverOpen} onOpenChange={handleCheckInPopoverOpenChange}>
           <PopoverTrigger render={<Button variant="outline" className="justify-start font-normal" />}>
             <CalendarIcon className="size-4" />
             {hasCheckInDateFilter ? (
@@ -266,7 +303,7 @@ export function LeadsToolbar({
           <PopoverContent className="w-auto p-0">
             <Calendar
               mode="range"
-              selected={checkInRange}
+              selected={pendingCheckInRange}
               onSelect={handleCheckInRangeSelect}
               numberOfMonths={2}
             />

@@ -101,6 +101,8 @@ export function FollowUpsTable({
   sortBy,
   sortDir,
   showAssignee,
+  users,
+  canReassign,
 }: {
   items: FollowUpRow[];
   total: number;
@@ -110,6 +112,8 @@ export function FollowUpsTable({
   sortBy: string;
   sortDir: "asc" | "desc";
   showAssignee: boolean;
+  users: Option[];
+  canReassign: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -144,6 +148,23 @@ export function FollowUpsTable({
     });
     if (!res.ok) {
       toast.error("Failed to update follow-up");
+      return;
+    }
+    router.refresh();
+  }
+
+  // Assignment lives on the Lead, not the follow-up — the same lead can have
+  // several pending follow-up rows here, and reassigning from any one of them
+  // updates the lead once, so every row for that lead reflects it immediately.
+  async function assignLead(leadId: string, assignedToId: string | null) {
+    const res = await fetch(`/api/leads/${leadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedToId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Failed to update assignment");
       return;
     }
     router.refresh();
@@ -227,8 +248,31 @@ export function FollowUpsTable({
                       <LeadStatusBadge name={item.lead.status.name} color={item.lead.status.color} />
                     </TableCell>
                     {showAssignee && (
-                      <TableCell className="text-sm">
-                        {item.lead.assignedTo?.name ?? "Unassigned"}
+                      <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
+                        {canReassign ? (
+                          <Select
+                            value={item.lead.assignedTo?.id ?? UNASSIGNED}
+                            onValueChange={(v) =>
+                              assignLead(item.lead.id, v === UNASSIGNED ? null : v)
+                            }
+                          >
+                            <SelectTrigger className="h-7 w-[150px] border-none bg-transparent px-1 shadow-none">
+                              <SelectValue>
+                                {item.lead.assignedTo?.name ?? "Unassigned"}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                              {users.map((u) => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {u.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          item.lead.assignedTo?.name ?? "Unassigned"
+                        )}
                       </TableCell>
                     )}
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
