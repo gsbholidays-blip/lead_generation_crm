@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { handleApiError, jsonError } from "@/lib/api-response";
 import { decryptToken } from "@/lib/meta/crypto";
-import { getManagedPages, subscribePageToWebhook, MetaGraphError } from "@/lib/meta/graph-client";
+import { getAccessiblePages, subscribePageToWebhook, MetaGraphError } from "@/lib/meta/graph-client";
 import { createMetaAccountFromToken, MetaAccountAlreadyConnectedError } from "@/lib/meta/connect";
 import { connectMetaOAuthPageSchema } from "@/lib/validations/meta";
 import { OAUTH_USER_TOKEN_COOKIE_NAME } from "@/lib/meta/oauth-state";
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     let pages;
     try {
-      pages = await getManagedPages(userToken);
+      pages = await getAccessiblePages(userToken);
     } catch (error) {
       if (error instanceof MetaGraphError) {
         return jsonError(`Failed to load your Facebook Pages: ${error.message}`, 400);
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    const page = pages.data.find((p) => p.id === pageId);
+    const page = pages.find((p) => p.id === pageId);
     if (!page) {
       return jsonError("Page not found or no longer accessible", 404);
     }

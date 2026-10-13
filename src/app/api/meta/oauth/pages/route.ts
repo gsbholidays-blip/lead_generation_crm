@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth/session";
 import { handleApiError, jsonError } from "@/lib/api-response";
 import { decryptToken } from "@/lib/meta/crypto";
-import { getManagedPages, MetaGraphError } from "@/lib/meta/graph-client";
+import { getAccessiblePages, MetaGraphError } from "@/lib/meta/graph-client";
 import { OAUTH_USER_TOKEN_COOKIE_NAME } from "@/lib/meta/oauth-state";
 
 export async function GET(request: NextRequest) {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     let pages;
     try {
-      pages = await getManagedPages(userToken);
+      pages = await getAccessiblePages(userToken);
     } catch (error) {
       if (error instanceof MetaGraphError) {
         return jsonError(`Failed to load your Facebook Pages: ${error.message}`, 400);
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
-    const pageIds = pages.data.map((page) => page.id);
+    const pageIds = pages.map((page) => page.id);
     const connected = await db.metaAccount.findMany({
       where: { metaPageId: { in: pageIds } },
       select: { metaPageId: true },
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     const connectedIds = new Set(connected.map((account) => account.metaPageId));
 
     return NextResponse.json({
-      pages: pages.data.map((page) => ({
+      pages: pages.map((page) => ({
         id: page.id,
         name: page.name,
         hasInstagram: !!page.instagram_business_account,
