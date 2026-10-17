@@ -6,6 +6,7 @@ import { can } from "@/lib/auth/rbac";
 import { calculateBookingFinancials } from "@/lib/booking-financials";
 import { generateInvoiceNumber } from "@/lib/invoice";
 import { getBookingDetail } from "@/lib/queries/bookings";
+import { logActivity } from "@/lib/activity";
 import { buildBookingEventPayload, notifyBookingEvent } from "@/lib/notify-booking-event";
 import {
   deleteSupabaseFile,
@@ -28,7 +29,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/bookings/[i
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/bookings/[id]">) {
   try {
-    await requireRole("ADMIN", "MANAGER");
+    const session = await requireRole("ADMIN", "MANAGER");
     const { id } = await ctx.params;
 
     const existing = await db.booking.findUnique({ where: { id } });
@@ -153,13 +154,27 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/bookings/[
       },
     });
 
-    // The booking form is the only place status is edited for a lead now —
-    // whichever status was just picked there becomes the lead's status too.
+    // Picking a status on the booking also becomes the lead's status —
+    // mirror the same change + activity log as a direct lead status edit so
+    // it shows up in the lead's timeline with who changed it and when.
     if (input.statusId !== undefined && updated.leadId) {
-      await db.lead.update({
+      const existingLead = await db.lead.findUnique({
         where: { id: updated.leadId },
-        data: { statusId: input.statusId, lastActivityAt: new Date() },
+        include: { status: true },
       });
+      if (existingLead && existingLead.statusId !== input.statusId) {
+        const newStatus = await db.leadStatus.findUnique({ where: { id: input.statusId } });
+        await db.lead.update({
+          where: { id: updated.leadId },
+          data: { statusId: input.statusId, lastActivityAt: new Date() },
+        });
+        await logActivity({
+          leadId: updated.leadId,
+          userId: session.sub,
+          type: newStatus?.isWon ? "CONVERTED" : newStatus?.isFinal ? "MARKED_LOST" : "STATUS_CHANGED",
+          description: `Status changed from ${existingLead.status.name} to ${newStatus?.name ?? "Unknown"}`,
+        });
+      }
     }
 
     // Bookings created before invoice numbers existed won't have one yet —

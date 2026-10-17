@@ -15,8 +15,8 @@ export const leadListQuerySchema = z
     assignedToId: z.string().optional(), // "unassigned" is a valid sentinel value
     createdFrom: z.coerce.date().optional(),
     createdTo: z.coerce.date().optional(),
-    checkInFrom: z.coerce.date().optional(),
-    checkInTo: z.coerce.date().optional(),
+    checkIn: z.coerce.date().optional(),
+    checkOut: z.coerce.date().optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
     sortBy: z.enum(LEAD_SORT_FIELDS).default("createdAt"),
@@ -25,10 +25,6 @@ export const leadListQuerySchema = z
   .refine((data) => !data.createdFrom || !data.createdTo || data.createdTo >= data.createdFrom, {
     message: "End date must be on or after the start date",
     path: ["createdTo"],
-  })
-  .refine((data) => !data.checkInFrom || !data.checkInTo || data.checkInTo >= data.checkInFrom, {
-    message: "End date must be on or after the start date",
-    path: ["checkInTo"],
   });
 
 export type LeadListQuery = z.infer<typeof leadListQuerySchema>;

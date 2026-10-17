@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 
 type Option = { id: string; name: string };
@@ -119,6 +120,11 @@ export function FollowUpsTable({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const [confirmTarget, setConfirmTarget] = useState<{
+    id: string;
+    leadId: string;
+    status: "DONE" | "CANCELLED";
+  } | null>(null);
   const hasActiveFilters = ["q", "status", "enquiredFrom", "enquiredTo"].some((key) =>
     searchParams.get(key)
   );
@@ -288,22 +294,28 @@ export function FollowUpsTable({
                       {item.note ?? "—"}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <Button
                           variant="ghost"
                           size="icon-sm"
                           title="Mark done"
-                          onClick={() => updateStatus(item.id, item.leadId, "DONE")}
+                          className="size-7 rounded-full border border-green-200 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-400 dark:hover:bg-green-900"
+                          onClick={() =>
+                            setConfirmTarget({ id: item.id, leadId: item.leadId, status: "DONE" })
+                          }
                         >
-                          <Check className="size-3.5" />
+                          <Check className="size-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title="Cancel"
-                          onClick={() => updateStatus(item.id, item.leadId, "CANCELLED")}
+                          title="Cancel follow-up"
+                          className="size-7 rounded-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
+                          onClick={() =>
+                            setConfirmTarget({ id: item.id, leadId: item.leadId, status: "CANCELLED" })
+                          }
                         >
-                          <X className="size-3.5" />
+                          <X className="size-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -344,6 +356,23 @@ export function FollowUpsTable({
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        onOpenChange={(open) => !open && setConfirmTarget(null)}
+        title={confirmTarget?.status === "DONE" ? "Mark follow-up as done?" : "Cancel follow-up?"}
+        description={
+          confirmTarget?.status === "DONE"
+            ? "This will mark the follow-up as completed."
+            : "This cannot be undone."
+        }
+        confirmLabel={confirmTarget?.status === "DONE" ? "Mark done" : "Cancel follow-up"}
+        cancelLabel="Back"
+        variant={confirmTarget?.status === "CANCELLED" ? "destructive" : "default"}
+        onConfirm={() => {
+          if (confirmTarget) updateStatus(confirmTarget.id, confirmTarget.leadId, confirmTarget.status);
+        }}
+      />
     </div>
   );
 }

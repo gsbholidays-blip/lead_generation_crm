@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 
 type FollowUp = {
@@ -30,6 +31,10 @@ export function LeadFollowUps({ leadId, followUps }: { leadId: string; followUps
   const [dueAt, setDueAt] = useState("");
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<{
+    id: string;
+    status: "DONE" | "CANCELLED";
+  } | null>(null);
 
   async function create() {
     if (!dueAt) return;
@@ -111,18 +116,20 @@ export function LeadFollowUps({ leadId, followUps }: { leadId: string; followUps
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => updateStatus(fu.id, "DONE")}
+                        className="size-7 rounded-full border border-green-200 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-400 dark:hover:bg-green-900"
+                        onClick={() => setConfirmTarget({ id: fu.id, status: "DONE" })}
                         title="Mark done"
                       >
-                        <Check className="size-3.5" />
+                        <Check className="size-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => updateStatus(fu.id, "CANCELLED")}
-                        title="Cancel"
+                        className="size-7 rounded-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
+                        onClick={() => setConfirmTarget({ id: fu.id, status: "CANCELLED" })}
+                        title="Cancel follow-up"
                       >
-                        <X className="size-3.5" />
+                        <X className="size-4" />
                       </Button>
                     </>
                   )}
@@ -132,6 +139,23 @@ export function LeadFollowUps({ leadId, followUps }: { leadId: string; followUps
           )}
         </div>
       </CardContent>
+
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        onOpenChange={(open) => !open && setConfirmTarget(null)}
+        title={confirmTarget?.status === "DONE" ? "Mark follow-up as done?" : "Cancel follow-up?"}
+        description={
+          confirmTarget?.status === "DONE"
+            ? "This will mark the follow-up as completed."
+            : "This cannot be undone."
+        }
+        confirmLabel={confirmTarget?.status === "DONE" ? "Mark done" : "Cancel follow-up"}
+        cancelLabel="Back"
+        variant={confirmTarget?.status === "CANCELLED" ? "destructive" : "default"}
+        onConfirm={() => {
+          if (confirmTarget) updateStatus(confirmTarget.id, confirmTarget.status);
+        }}
+      />
     </Card>
   );
 }

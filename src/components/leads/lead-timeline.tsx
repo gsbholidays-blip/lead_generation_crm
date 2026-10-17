@@ -29,7 +29,16 @@ export function LeadTimeline({ activities }: { activities: ActivityItem[] }) {
                   <ActivityIcon type={activity.type} className="size-3" />
                 </span>
                 <p className="text-sm">{activity.description}</p>
-                <p className="text-muted-foreground text-xs">
+                <p
+                  className="text-muted-foreground text-xs"
+                  title={new Date(activity.createdAt).toLocaleString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                >
                   {activity.user?.name ?? "System"} ·{" "}
                   {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
                 </p>

@@ -2,12 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { DateRange } from "react-day-picker";
-import { Search, Download, FileSpreadsheet, FileText, CalendarIcon, X } from "lucide-react";
+import { Search, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -24,16 +22,6 @@ import {
 import { AddLeadDialog } from "@/components/leads/add-lead-dialog";
 
 type Option = { id: string; name: string };
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function toDateParam(date: Date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
-}
 
 const SOURCES = [
   { value: "FACEBOOK", label: "Facebook" },
@@ -63,22 +51,10 @@ export function LeadsToolbar({
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const createdFrom = searchParams.get("createdFrom");
-  const createdTo = searchParams.get("createdTo");
-  const createdRange: DateRange | undefined = createdFrom
-    ? { from: new Date(createdFrom), to: createdTo ? new Date(createdTo) : new Date(createdFrom) }
-    : undefined;
-
-  const checkInFrom = searchParams.get("checkInFrom");
-  const checkInTo = searchParams.get("checkInTo");
-  const checkInRange: DateRange | undefined = checkInFrom
-    ? { from: new Date(checkInFrom), to: checkInTo ? new Date(checkInTo) : new Date(checkInFrom) }
-    : undefined;
-
-  const [createdPopoverOpen, setCreatedPopoverOpen] = useState(false);
-  const [pendingCreatedRange, setPendingCreatedRange] = useState<DateRange | undefined>(createdRange);
-  const [checkInPopoverOpen, setCheckInPopoverOpen] = useState(false);
-  const [pendingCheckInRange, setPendingCheckInRange] = useState<DateRange | undefined>(checkInRange);
+  const createdFrom = searchParams.get("createdFrom") ?? "";
+  const createdTo = searchParams.get("createdTo") ?? "";
+  const checkIn = searchParams.get("checkIn") ?? "";
+  const checkOut = searchParams.get("checkOut") ?? "";
 
   function updateParams(updates: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -105,64 +81,6 @@ export function LeadsToolbar({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
-
-  function commitCreatedRange(selected: DateRange | undefined) {
-    updateParams({
-      createdFrom: selected?.from ? toDateParam(selected.from) : null,
-      createdTo: selected?.to
-        ? toDateParam(selected.to)
-        : selected?.from
-          ? toDateParam(selected.from)
-          : null,
-    });
-  }
-
-  // Keep the in-progress selection local while the popover is open — committing
-  // to the URL after every click re-derives the Calendar's controlled `selected`
-  // as a completed range, so a second click starts a new selection instead of
-  // extending it.
-  function handleCreatedRangeSelect(selected: DateRange | undefined) {
-    setPendingCreatedRange(selected);
-    if (selected?.from && selected?.to) {
-      commitCreatedRange(selected);
-      setCreatedPopoverOpen(false);
-    }
-  }
-
-  function handleCreatedPopoverOpenChange(open: boolean) {
-    setCreatedPopoverOpen(open);
-    if (open) setPendingCreatedRange(createdRange);
-    else commitCreatedRange(pendingCreatedRange);
-  }
-
-  const hasCreatedDateFilter = !!createdFrom;
-
-  function commitCheckInRange(selected: DateRange | undefined) {
-    updateParams({
-      checkInFrom: selected?.from ? toDateParam(selected.from) : null,
-      checkInTo: selected?.to
-        ? toDateParam(selected.to)
-        : selected?.from
-          ? toDateParam(selected.from)
-          : null,
-    });
-  }
-
-  function handleCheckInRangeSelect(selected: DateRange | undefined) {
-    setPendingCheckInRange(selected);
-    if (selected?.from && selected?.to) {
-      commitCheckInRange(selected);
-      setCheckInPopoverOpen(false);
-    }
-  }
-
-  function handleCheckInPopoverOpenChange(open: boolean) {
-    setCheckInPopoverOpen(open);
-    if (open) setPendingCheckInRange(checkInRange);
-    else commitCheckInRange(pendingCheckInRange);
-  }
-
-  const hasCheckInDateFilter = !!checkInFrom;
 
   function exportUrl(format: "csv" | "xlsx") {
     const params = new URLSearchParams(searchParams.toString());
@@ -255,71 +173,52 @@ export function LeadsToolbar({
           </Select>
         )}
 
-        <Popover open={createdPopoverOpen} onOpenChange={handleCreatedPopoverOpenChange}>
-          <PopoverTrigger render={<Button variant="outline" className="justify-start font-normal" />}>
-            <CalendarIcon className="size-4" />
-            {hasCreatedDateFilter ? (
-              <span>
-                {formatDate(createdFrom!)}
-                {createdTo && createdTo !== createdFrom ? ` – ${formatDate(createdTo)}` : ""}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">Created date</span>
-            )}
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="range"
-              selected={pendingCreatedRange}
-              onSelect={handleCreatedRangeSelect}
-              numberOfMonths={2}
-            />
-          </PopoverContent>
-        </Popover>
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor="createdFrom" className="text-muted-foreground text-xs whitespace-nowrap">
+            Enquiry date
+          </Label>
+          <Input
+            id="createdFrom"
+            type="date"
+            className="w-[150px]"
+            value={createdFrom}
+            onChange={(e) => updateParams({ createdFrom: e.target.value || null })}
+          />
+          <span className="text-muted-foreground text-xs">to</span>
+          <Input
+            id="createdTo"
+            type="date"
+            className="w-[150px]"
+            value={createdTo}
+            onChange={(e) => updateParams({ createdTo: e.target.value || null })}
+          />
+        </div>
 
-        {hasCreatedDateFilter && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Clear date filter"
-            onClick={() => updateParams({ createdFrom: null, createdTo: null })}
-          >
-            <X className="size-3.5" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor="checkIn" className="text-muted-foreground text-xs whitespace-nowrap">
+            Check-in
+          </Label>
+          <Input
+            id="checkIn"
+            type="date"
+            className="w-[150px]"
+            value={checkIn}
+            onChange={(e) => updateParams({ checkIn: e.target.value || null })}
+          />
+        </div>
 
-        <Popover open={checkInPopoverOpen} onOpenChange={handleCheckInPopoverOpenChange}>
-          <PopoverTrigger render={<Button variant="outline" className="justify-start font-normal" />}>
-            <CalendarIcon className="size-4" />
-            {hasCheckInDateFilter ? (
-              <span>
-                {formatDate(checkInFrom!)}
-                {checkInTo && checkInTo !== checkInFrom ? ` – ${formatDate(checkInTo)}` : ""}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">Check-in date</span>
-            )}
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="range"
-              selected={pendingCheckInRange}
-              onSelect={handleCheckInRangeSelect}
-              numberOfMonths={2}
-            />
-          </PopoverContent>
-        </Popover>
-
-        {hasCheckInDateFilter && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Clear check-in date filter"
-            onClick={() => updateParams({ checkInFrom: null, checkInTo: null })}
-          >
-            <X className="size-3.5" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor="checkOut" className="text-muted-foreground text-xs whitespace-nowrap">
+            Check-out
+          </Label>
+          <Input
+            id="checkOut"
+            type="date"
+            className="w-[150px]"
+            value={checkOut}
+            onChange={(e) => updateParams({ checkOut: e.target.value || null })}
+          />
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

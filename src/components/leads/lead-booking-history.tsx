@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BookingForm, type BookingRow } from "@/components/bookings/booking-form";
 
 type PackageOption = {
@@ -78,6 +85,18 @@ export function LeadBookingHistory({
     }
     toast.success("Booking deleted");
     if (editingBooking?.id === booking.id) setEditingBooking(null);
+    router.refresh();
+  }
+
+  async function handleStatusChange(booking: BookingRow, statusId: string) {
+    const formData = new FormData();
+    formData.set("statusId", statusId);
+    const res = await fetch(`/api/bookings/${booking.id}`, { method: "PATCH", body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Update failed");
+      return;
+    }
     router.refresh();
   }
 
@@ -175,6 +194,24 @@ export function LeadBookingHistory({
                     </span>
                     {booking.isCancelled ? (
                       <Badge variant="destructive">Cancelled</Badge>
+                    ) : canManage ? (
+                      <Select
+                        value={booking.statusId}
+                        onValueChange={(v) => v && handleStatusChange(booking, v)}
+                      >
+                        <SelectTrigger className="h-7 w-auto border-none bg-transparent px-1 shadow-none">
+                          <SelectValue>
+                            <LeadStatusBadge name={booking.status.name} color={booking.status.color} />
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statuses.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     ) : (
                       <LeadStatusBadge name={booking.status.name} color={booking.status.color} />
                     )}

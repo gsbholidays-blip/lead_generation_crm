@@ -33,18 +33,20 @@ export function buildLeadWhere(query: LeadListQuery, scope: LeadScope): Prisma.L
     }
   }
 
-  if (query.checkInFrom || query.checkInTo) {
-    where.checkInDate = {};
-    if (query.checkInFrom) {
-      const start = new Date(query.checkInFrom);
-      start.setHours(0, 0, 0, 0);
-      where.checkInDate.gte = start;
-    }
-    if (query.checkInTo) {
-      const end = new Date(query.checkInTo);
-      end.setHours(23, 59, 59, 999);
-      where.checkInDate.lte = end;
-    }
+  if (query.checkIn) {
+    const start = new Date(query.checkIn);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(query.checkIn);
+    end.setHours(23, 59, 59, 999);
+    where.checkInDate = { gte: start, lte: end };
+  }
+
+  if (query.checkOut) {
+    const start = new Date(query.checkOut);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(query.checkOut);
+    end.setHours(23, 59, 59, 999);
+    where.checkOutDate = { gte: start, lte: end };
   }
 
   if (scope.forcedAssignedToId) {

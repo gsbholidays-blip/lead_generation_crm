@@ -66,7 +66,6 @@ export default async function LeadsPage({
 
       <LeadsTable
         leads={leads}
-        statuses={statuses}
         users={users}
         canReassign={can(role, "reassignLeads")}
         total={result.total}

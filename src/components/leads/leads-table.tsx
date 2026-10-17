@@ -90,18 +90,13 @@ type Option = { id: string; name: string };
 
 const UNASSIGNED = "unassigned";
 
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+function formatShortDate(value: string | null) {
+  if (!value) return null;
+  return new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
 export function LeadsTable({
   leads,
-  statuses,
   users,
   canReassign,
   total,
@@ -113,7 +108,6 @@ export function LeadsTable({
   canDelete,
 }: {
   leads: LeadRow[];
-  statuses: Option[];
   users: Option[];
   canReassign: boolean;
   total: number;
@@ -135,8 +129,8 @@ export function LeadsTable({
     "assignedToId",
     "createdFrom",
     "createdTo",
-    "checkInFrom",
-    "checkInTo",
+    "checkIn",
+    "checkOut",
   ].some((key) => searchParams.get(key));
 
   function updateParams(updates: Record<string, string | null>) {
@@ -189,20 +183,18 @@ export function LeadsTable({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Invoice #</TableHead>
               <TableHead>
                 <SortHeader
                   field="fullName"
-                  label="Lead"
+                  label="Name"
                   sortBy={sortBy}
                   sortDir={sortDir}
                   onToggle={toggleSort}
                 />
               </TableHead>
-              <TableHead>City / State</TableHead>
+              <TableHead>Check-in/Check-out</TableHead>
               <TableHead>Package</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Assigned To</TableHead>
               <TableHead>
                 <SortHeader
                   field="followUpDate"
@@ -212,25 +204,25 @@ export function LeadsTable({
                   onToggle={toggleSort}
                 />
               </TableHead>
-              <TableHead>Invoice #</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Assign</TableHead>
               <TableHead>
                 <SortHeader
                   field="createdAt"
-                  label="Created"
+                  label="Enquiry date"
                   sortBy={sortBy}
                   sortDir={sortDir}
                   onToggle={toggleSort}
                 />
               </TableHead>
-              <TableHead>Check-in</TableHead>
-              <TableHead>Check-out</TableHead>
               {canDelete && <TableHead className="w-10" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="h-40 text-center">
+                <TableCell colSpan={canDelete ? 10 : 9} className="h-40 text-center">
                   {hasActiveFilters ? (
                     <EmptyState
                       icon={SearchX}
@@ -252,6 +244,12 @@ export function LeadsTable({
               leads.map((lead) => (
                 <TableRow key={lead.id} className="group">
                   <TableCell
+                    className="text-muted-foreground cursor-pointer text-sm whitespace-nowrap"
+                    onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
+                  >
+                    {lead.invoiceNumber ?? "—"}
+                  </TableCell>
+                  <TableCell
                     className="cursor-pointer"
                     onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
                   >
@@ -259,10 +257,12 @@ export function LeadsTable({
                     <div className="text-muted-foreground text-xs">{lead.phone}</div>
                   </TableCell>
                   <TableCell
-                    className="cursor-pointer text-sm"
+                    className="text-muted-foreground cursor-pointer text-sm whitespace-nowrap"
                     onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
                   >
-                    {lead.city ? `${lead.city}${lead.state ? `, ${lead.state}` : ""}` : "—"}
+                    {lead.checkInDate || lead.checkOutDate
+                      ? `${formatShortDate(lead.checkInDate) ?? "—"} – ${formatShortDate(lead.checkOutDate) ?? "—"}`
+                      : "—"}
                   </TableCell>
                   <TableCell
                     className="max-w-[180px] cursor-pointer truncate text-sm"
@@ -270,27 +270,33 @@ export function LeadsTable({
                   >
                     {lead.packageInterest ?? "—"}
                   </TableCell>
+                  <TableCell
+                    className="cursor-pointer text-sm"
+                    onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
+                  >
+                    {lead.followUpDate ? (
+                      <span
+                        className={
+                          new Date(lead.followUpDate) < new Date() ? "font-medium text-red-600" : ""
+                        }
+                      >
+                        {new Date(lead.followUpDate).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                   <TableCell>
                     <SourceBadge source={lead.source} />
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      value={lead.statusId}
-                      onValueChange={(v) => patchLead(lead.id, { statusId: v })}
-                    >
-                      <SelectTrigger className="h-7 w-[150px] border-none bg-transparent px-1 shadow-none">
-                        <SelectValue>
-                          <LeadStatusBadge name={lead.status.name} color={lead.status.color} />
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {statuses.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <TableCell
+                    className="cursor-pointer"
+                    onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
+                  >
+                    <LeadStatusBadge name={lead.status.name} color={lead.status.color} />
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     {canReassign ? (
@@ -319,31 +325,6 @@ export function LeadsTable({
                     )}
                   </TableCell>
                   <TableCell
-                    className="cursor-pointer text-sm"
-                    onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
-                  >
-                    {lead.followUpDate ? (
-                      <span
-                        className={
-                          new Date(lead.followUpDate) < new Date() ? "font-medium text-red-600" : ""
-                        }
-                      >
-                        {new Date(lead.followUpDate).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell
-                    className="text-muted-foreground cursor-pointer text-sm whitespace-nowrap"
-                    onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
-                  >
-                    {lead.invoiceNumber ?? "—"}
-                  </TableCell>
-                  <TableCell
                     className="text-muted-foreground cursor-pointer text-sm whitespace-nowrap"
                     onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
                   >
@@ -354,18 +335,6 @@ export function LeadsTable({
                       hour: "numeric",
                       minute: "2-digit",
                     })}
-                  </TableCell>
-                  <TableCell
-                    className="text-muted-foreground cursor-pointer text-sm whitespace-nowrap"
-                    onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
-                  >
-                    {formatDate(lead.checkInDate)}
-                  </TableCell>
-                  <TableCell
-                    className="text-muted-foreground cursor-pointer text-sm whitespace-nowrap"
-                    onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
-                  >
-                    {formatDate(lead.checkOutDate)}
                   </TableCell>
                   {canDelete && (
                     <TableCell onClick={(e) => e.stopPropagation()}>
